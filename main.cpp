@@ -54,13 +54,25 @@ std::string getWebpage(std::string url)
 std::string extractOutput(std::string content)
 {
 	std::string result = "Sorry, no data found";
-	size_t pos = content.find("registrarData");
+	size_t pos = content.find("registryData");
+	// always prioritize data fetched from ID = registryData
 	if (pos != std::string::npos)
 	{
 		size_t pos_start = content.find(">", pos) + 1;
 		size_t pos_stop = content.find("</pre>", pos_start);
 		result = content.substr(pos_start, pos_stop - pos_start);
 		result = cleanOutput(result);
+	}
+	else
+	{
+		pos = content.find("registrarData");
+		if (pos != std::string::npos)
+		{
+			size_t pos_start = content.find(">", pos) + 1;
+			size_t pos_stop = content.find("</pre>", pos_start);
+			result = content.substr(pos_start, pos_stop - pos_start);
+			result = cleanOutput(result);
+		}
 	}
 	return result;
 }
