@@ -26,28 +26,112 @@ int main(int argc, char** argv)
 // get website raw content
 std::string getWebpage(std::string url)
 {
-	CURL* curl = curl_easy_init();
-	std::string htmlBuffer;
-	struct curl_slist* header = NULL;
-	curl_slist_append(header, "Content-Type: text/html; charset=UTF-8");
-	//char* realurl = curl_easy_escape(curl, url.c_str(), url.length);
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &htmlBuffer);
-	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header);
-	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-	curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 3L);
-	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-	CURLcode result = curl_easy_perform(curl);
-	curl_slist_free_all(header);
-	//curl_free(realurl);
-	curl_easy_cleanup(curl);
+	std::string content_str;
+	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> str_wstr_converter;
+	std::wstring url_w = str_wstr_converter.from_bytes(url);
 
-	if (result != CURLE_OK)
+	if (SUCCEEDED(OleInitialize(NULL)))
 	{
-		std::cout << "Failed to connnect to whois.com, please check your network" << std::endl;
+		IWebBrowser2* browser = nullptr;
+		HRESULT hr = CoCreateInstance(CLSID_InternetExplorer, NULL, CLSCTX_LOCAL_SERVER, IID_IWebBrowser2, (void**)&browser);
+
+		VARIANT empty;
+		VariantInit(&empty);
+
+		if (hr == S_OK)
+		{
+			BSTR URL = SysAllocString(url_w.c_str());
+			hr = browser->Navigate(URL, &empty, &empty, &empty, &empty);
+			
+
+			READYSTATE browserState;
+			do 
+			{
+				Sleep(10);
+				browser->get_ReadyState(&browserState);
+
+			} while (browserState != READYSTATE_COMPLETE);
+
+#ifdef _DEBUG
+			browser->put_Visible(VARIANT_TRUE);
+#endif
+
+			IDispatch* iPatch = nullptr;
+			hr = browser->get_Document(&iPatch);
+#ifdef _DEBUG
+			assert(iPatch != nullptr);
+#endif
+
+			IHTMLDocument2* iDoc = nullptr;
+			hr = iPatch->QueryInterface(IID_IHTMLDocument2, (void**)&iDoc);
+#ifdef _DEBUG
+			assert(iDoc != nullptr);
+#endif
+
+			IHTMLElement* iElem = nullptr;
+			hr = iDoc->get_body(&iElem);
+#ifdef _DEBUG
+			assert(iElem != nullptr);
+#endif
+
+			BSTR content = nullptr;
+			hr = iElem->get_innerHTML(&content);
+#ifdef _DEBUG
+			assert(content != nullptr);
+#endif
+
+			std::wstring content_wstr = std::wstring(content, SysStringLen(content));
+			content_str = str_wstr_converter.to_bytes(content_wstr);
+
+			iElem->Release();
+			iDoc->Release();	
+			iPatch->Release();
+			
+			SysFreeString(URL);
+			browser->Quit();
+			browser->Release();
+		}
+		else
+		{
+			std::cout << "Failed to create instance of internet explorer" << std::endl;
+#ifdef _DEBUG
+			printError();
+#endif
+		}
+		OleUninitialize();
+	}
+	else
+	{
+		std::cout << "Failed to initialize OLE" << std::endl;
+#ifdef _DEBUG
+		printError();
+#endif
 	}
 
-	return htmlBuffer;
+	return content_str;
+
+	//CURL* curl = curl_easy_init();
+	//std::string htmlBuffer;
+	//struct curl_slist* header = NULL;
+	//curl_slist_append(header, "Content-Type: text/html; charset=UTF-8");
+	////char* realurl = curl_easy_escape(curl, url.c_str(), url.length);
+	//curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+	//curl_easy_setopt(curl, CURLOPT_WRITEDATA, &htmlBuffer);
+	//curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header);
+	//curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+	//curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 3L);
+	//curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+	//CURLcode result = curl_easy_perform(curl);
+	//curl_slist_free_all(header);
+	////curl_free(realurl);
+	//curl_easy_cleanup(curl);
+
+	//if (result != CURLE_OK)
+	//{
+	//	std::cout << "Failed to connnect to whois.com, please check your network" << std::endl;
+	//}
+
+	//return htmlBuffer;
 }
 
 // extract desired data
@@ -133,9 +217,26 @@ std::string cleanOutput(std::string data)
 	return data;
 }
 
-size_t write_callback(char* content, size_t size, size_t nmemb, void* user)
+//size_t write_callback(char* content, size_t size, size_t nmemb, void* user)
+//{
+//	size_t realsize = size * nmemb;
+//	((std::string*)user)->append(content, realsize);
+//	return realsize;
+//}
+
+#ifdef _DEBUG
+void printError()
 {
-	size_t realsize = size * nmemb;
-	((std::string*)user)->append(content, realsize);
-	return realsize;
+	DWORD errorID = GetLastError();
+	std::string lastError = "None";
+	if (errorID)
+	{
+		LPSTR messageBuf = nullptr;
+		size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+			NULL, errorID, 0x0800, (LPSTR)&messageBuf, 0, NULL);
+		lastError = std::string(messageBuf, size);
+		LocalFree(messageBuf);
+	}
+	std::cout << "Last Error: " << lastError << std::endl;
 }
+#endif
