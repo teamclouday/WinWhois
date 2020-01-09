@@ -16,3 +16,7 @@ Because the program is one execution at a time, so I didn't check for any potent
 
 Another potential problem is on the url  
 This program by default use UTF-8, so if the input url contains some unicode characters, it may not be successfully parsed to be a valid target url. Currently, the program can only handle basic english characters or ip address. Anyone is welcome to contribute an url parser  
+
+------
+
+### To try the program, see the Release page  
